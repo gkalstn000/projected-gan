@@ -39,9 +39,9 @@ def _make_efficientnet(model):
     return pretrained
 
 
-def calc_channels(pretrained, inp_res=224):
+def calc_channels(pretrained, inp_res=224, img_channel=3):
     channels = []
-    tmp = torch.zeros(1, 3, inp_res, inp_res)
+    tmp = torch.zeros(1, img_channel, inp_res, inp_res)
 
     # forward pass
     tmp = pretrained.layer0(tmp)
@@ -56,11 +56,11 @@ def calc_channels(pretrained, inp_res=224):
     return channels
 
 
-def _make_projector(im_res, cout, proj_type, expand=False):
+def _make_projector(im_res, cout, proj_type, expand=False, img_channel=3):
     assert proj_type in [0, 1, 2], "Invalid projection type"
 
     ### Build pretrained feature network
-    model = timm.create_model('tf_efficientnet_lite0', pretrained=True)
+    model = timm.create_model('tf_efficientnet_lite0', pretrained=True, in_chans=img_channel)
     pretrained = _make_efficientnet(model)
 
     # determine resolution of feature maps, this is later used to calculate the number
@@ -69,7 +69,7 @@ def _make_projector(im_res, cout, proj_type, expand=False):
     # independent of the dataset resolution
     im_res = 256
     pretrained.RESOLUTIONS = [im_res//4, im_res//8, im_res//16, im_res//32]
-    pretrained.CHANNELS = calc_channels(pretrained)
+    pretrained.CHANNELS = calc_channels(pretrained, img_channel=img_channel)
 
     if proj_type == 0: return pretrained, None
 
@@ -104,8 +104,9 @@ class F_RandomProj(nn.Module):
         self.cout = cout
         self.expand = expand
 
+        img_channel = kwargs.get('img_channels', 3)
         # build pretrained feature network and random decoder (scratch)
-        self.pretrained, self.scratch = _make_projector(im_res=im_res, cout=self.cout, proj_type=self.proj_type, expand=self.expand)
+        self.pretrained, self.scratch = _make_projector(im_res=im_res, cout=self.cout, proj_type=self.proj_type, expand=self.expand, img_channel=img_channel)
         self.CHANNELS = self.pretrained.CHANNELS
         self.RESOLUTIONS = self.pretrained.RESOLUTIONS
 

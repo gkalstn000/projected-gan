@@ -214,6 +214,26 @@ def open_mnist(images_gz: str, *, max_images: Optional[int]):
     return max_idx, iterate_images()
 
 #----------------------------------------------------------------------------
+def get_alpha_channel(img: np.ndarray, resolution:Tuple[int, int], thresh: int = 5) -> np.ndarray:
+    if img.ndim == 2:
+        img = img[:, :, None]
+    h, w, c = img.shape
+    if c == 4:
+        return img
+    if c not in (1, 3):
+        raise ValueError(f"unsupported channels: {c}")
+    if img.dtype != np.uint8:
+        raise ValueError(f"expected uint8, got {img.dtype}")
+
+    if c == 1:
+        white_mask = img[:, :, 0] >= 255 - thresh
+    else:
+        white_mask = np.all(img >= 255 - thresh, axis=2)
+
+    alpha = np.where(white_mask, 0, 255).astype(np.uint8)
+    pil_alpha = PIL.Image.fromarray(alpha, mode="L")
+    pil_alpha = pil_alpha.resize(resolution, PIL.Image.LANCZOS)
+    return np.array(pil_alpha)
 
 def make_transform(
     transform: Optional[str],
@@ -330,13 +350,16 @@ def open_dest(dest: str) -> Tuple[str, Callable[[str, Union[bytes, str]], None],
 @click.option('--max-images', help='Output only up to `max-images` images', type=int, default=None)
 @click.option('--transform', help='Input crop/resize mode', type=click.Choice(['center-crop', 'center-crop-wide']))
 @click.option('--resolution', help='Output resolution (e.g., \'512x512\')', metavar='WxH', type=parse_tuple)
+@click.option('--to_rgba', is_flag=True, default=False, help='Convert images to RGBA')
+
 def convert_dataset(
-    ctx: click.Context,
-    source: str,
-    dest: str,
-    max_images: Optional[int],
-    transform: Optional[str],
-    resolution: Optional[Tuple[int, int]]
+        ctx: click.Context,
+        source: str,
+        dest: str,
+        max_images: Optional[int],
+        transform: Optional[str],
+        resolution: Optional[Tuple[int, int]],
+        to_rgba: bool,
 ):
     """Convert an image dataset into a dataset archive usable with StyleGAN2 ADA PyTorch.
 
@@ -422,6 +445,10 @@ def convert_dataset(
         if img is None:
             continue
 
+        if to_rgba:
+            alpha_channel = get_alpha_channel(image['img'], resolution)
+            img = np.dstack([img, alpha_channel])
+
         # Error check to require uniform image attributes across
         # the whole dataset.
         channels = img.shape[2] if img.ndim == 3 else 1
@@ -436,8 +463,8 @@ def convert_dataset(
             height = dataset_attrs['height']
             if width != height:
                 error(f'Image dimensions after scale and crop are required to be square.  Got {width}x{height}')
-            if dataset_attrs['channels'] not in [1, 3]:
-                error('Input images must be stored as RGB or grayscale')
+            if dataset_attrs['channels'] not in [1, 3, 4]:
+                error('Input images must be stored as RGBA or RGB or grayscale')
             if width != 2 ** int(np.floor(np.log2(width))):
                 error('Image width/height after scale and crop are required to be power-of-two')
         elif dataset_attrs != cur_image_attrs:
@@ -445,7 +472,7 @@ def convert_dataset(
             error(f'Image {archive_fname} attributes must be equal across all images of the dataset.  Got:\n' + '\n'.join(err))
 
         # Save the image as an uncompressed PNG.
-        img = PIL.Image.fromarray(img, { 1: 'L', 3: 'RGB' }[channels])
+        img = PIL.Image.fromarray(img, { 1: 'L', 3: 'RGB', 4:'RGBA' }[channels])
         image_bits = io.BytesIO()
         img.save(image_bits, format='png', compress_level=0, optimize=False)
         save_bytes(os.path.join(archive_root_dir, archive_fname), image_bits.getbuffer())

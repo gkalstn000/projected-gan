@@ -158,7 +158,7 @@ class ProjectedDiscriminator(torch.nn.Module):
         super().__init__()
         self.diffaug = diffaug
         self.interp224 = interp224
-        self.feature_network = F_RandomProj(**backbone_kwargs)
+        self.feature_network = F_RandomProj(**backbone_kwargs, **kwargs)
         self.discriminator = MultiScaleD(
             channels=self.feature_network.CHANNELS,
             resolutions=self.feature_network.RESOLUTIONS,
