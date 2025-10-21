@@ -1,4 +1,9 @@
 
+## Setting 동일
+```bash
+conda env create -f environment.yml
+conda activate pg
+```
 ## RGBA Convert
 `dataset_tool.py` 모듈 최대한 활용.
 * 굳이 따로 RGBA converter 만들필요 없음.
