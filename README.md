@@ -53,6 +53,7 @@ class ProjectedDiscriminator(torch.nn.Module):
         super().__init__()
         self.diffaug = diffaug
         self.interp224 = interp224
+        # self.feature_network = F_RandomProj(**backbone_kwargs) # 기존 코드
         self.feature_network = F_RandomProj(**backbone_kwargs, **kwargs) # in_channel 정보가 담긴 kwargs 인자로 전달
         ...
 
@@ -63,6 +64,7 @@ def _make_projector(im_res, cout, proj_type, expand=False, img_channel=3):
     assert proj_type in [0, 1, 2], "Invalid projection type"
 
     ### Build pretrained feature network
+    # model = timm.create_model('tf_efficientnet_lite0', pretrained=True) # 기존 코드
     model = timm.create_model('tf_efficientnet_lite0', pretrained=True, in_chans=img_channel)
 ```
 
